@@ -3,6 +3,7 @@
 #Verifica também os movimentos validos e faz um track dos movimentos  #
 #######################################################################
 
+
 '''
 Criando o tabuleiro do jogo.
 '''
@@ -30,6 +31,11 @@ class Estado_Atual_do_Jogo():
         self.afogamento = False
         self.cravada= []
         self.checks = []
+        self.enpassant = () #Verifica se o enpassant é possivel
+        self.roque_pequeno = Roque_Pequeno_Atual(True, True, True, True)
+        self.roque_pequeno_log = [Roque_Pequeno_Atual(self.roque_pequeno.rbs, self.roque_pequeno.rps, 
+                                                      self.roque_pequeno.dbs, self.roque_pequeno.dps)]
+
 
 
     def cria_jogada(self, jogada):
@@ -41,7 +47,33 @@ class Estado_Atual_do_Jogo():
             self.posicao_rei_branco = (jogada.linha_fim, jogada.coluna_fim)
         elif jogada.peça_jogada == "Rp":
             self.posicao_rei_preto = (jogada.linha_fim, jogada.coluna_fim)    
-        
+
+        #Promoção de Peões
+        if jogada.promocao_peao:
+            self.tabuleiro[jogada.linha_fim][jogada.coluna_fim] = 'D' + jogada.peça_jogada[1]
+
+        #En passant
+        if jogada.enpassant_jogada:
+            self.tabuleiro[jogada.linha_ini][jogada.coluna_fim] = "--" #Capturando a peça
+
+        if jogada.peça_jogada[0] == "P" and abs(jogada.linha_ini - jogada.linha_fim) == 2:
+            self.enpassant = ((jogada.linha_ini + jogada.linha_fim)//2, jogada.coluna_ini)
+        else:
+            self.enpassant = ()
+
+        #Roque
+
+        if jogada.roque_jogada:
+            if jogada.coluna_fim - jogada.coluna_ini == 2:
+               self.tabuleiro[jogada.linha_fim][jogada.coluna_fim - 1] = self.tabuleiro[jogada.linha_fim][jogada.coluna_fim+1]
+               self.tabuleiro[jogada.linha_fim][jogada.coluna_fim + 1] = "--"
+            else:
+               self.tabuleiro[jogada.linha_fim][jogada.coluna_fim + 1] = self.tabuleiro[jogada.linha_fim][jogada.coluna_fim-2]
+               self.tabuleiro[jogada.linha_fim][jogada.coluna_fim - 2] = "--"    
+
+        self.update_roque_pequeno(jogada)
+        self.roque_pequeno_log.append(Roque_Pequeno_Atual(self.roque_pequeno.rbs, self.roque_pequeno.rps, 
+                                                         self.roque_pequeno.dbs, self.roque_pequeno.dps))
 
     '''
     Refaz último movimento feito
@@ -56,13 +88,66 @@ class Estado_Atual_do_Jogo():
                 self.posicao_rei_branco = (jogada.linha_ini, jogada.coluna_ini)
             elif jogada.peça_jogada == "Rp":
                 self.posicao_rei_preto = (jogada.linha_ini, jogada.coluna_ini)   
-            
+
+            #Enpassant
+            if jogada.enpassant_jogada:
+                self.tabuleiro[jogada.linha_fim][jogada.coluna_fim] = "--"
+                self.tabuleiro[jogada.linha_ini][jogada.coluna_fim] = jogada.peça_capturada
+                self.enpassant = (jogada.linha_fim, jogada.coluna_fim)
+
+            if jogada.peça_jogada[0] == "P" and abs(jogada.linha_ini - jogada.linha_fim) == 2:
+                self.enpassant = ()
+
+            #Roque_pequeno
+            self.roque_pequeno_log.pop()
+            novo_roque = self.roque_pequeno_log[-1]
+            self.roque_pequeno = Roque_Pequeno_Atual(novo_roque.rbs,novo_roque.rps,novo_roque.dbs,novo_roque.dps)
+
+            #Roque_grande
+            if jogada.roque_jogada:
+                if jogada.coluna_fim - jogada.coluna_ini == 2:
+                    self.tabuleiro[jogada.linha_fim][jogada.coluna_fim+1] = self.tabuleiro[jogada.linha_fim][jogada.coluna_fim -1]
+                    self.tabuleiro[jogada.linha_fim][jogada.coluna_fim-1] = "--"
+                else:
+                    self.tabuleiro[jogada.linha_fim][jogada.coluna_fim-2] = self.tabuleiro[jogada.linha_fim][jogada.coluna_fim +1]
+                    self.tabuleiro[jogada.linha_fim][jogada.coluna_fim+1] = "--"
+                    
+            self.checkmate = False
+            self.afogamento = False
+
+    def update_roque_pequeno(self, jogada):
+        if jogada.peça_jogada == 'Rb':
+            self.roque_pequeno.rbs = False
+            self.roque_pequeno.dbs = False
+        elif jogada.peça_jogada == 'Rp':
+            self.roque_pequeno.rps = False
+            self.roque_pequeno.dps = False
+
+        elif jogada.peça_jogada == 'Tb':
+            if jogada.linha_ini == 7:
+                if jogada.coluna_ini == 0:
+                    self.roque_pequeno.dbs = False
+                elif jogada.coluna_ini == 7:
+                    self.roque_pequeno.rbs = False
+        elif jogada.peça_jogada == 'Tp':
+            if jogada.linha_ini == 0:
+                if jogada.coluna_ini == 0:
+                    self.roque_pequeno.dps = False
+                elif jogada.coluna_ini == 7:
+                    self.roque_pequeno.rps = False            
+
+
 
     '''
-    Validação se as jogadas -> Considernado checks
+    Validação se as jogadas -> Considerando checks
     '''
     def valida_todas_jogadas(self):
+        temp_enpassant = self.enpassant
+        temp_roque_pequeno = Roque_Pequeno_Atual(self.roque_pequeno.rbs, self.roque_pequeno.rps,
+                                                 self.roque_pequeno.dbs, self.roque_pequeno.dps)
+        
         jogadas_possiveis = self.todas_as_jogadas_possiveis()
+
         for i in range(len(jogadas_possiveis)-1, -1, -1):
             self.cria_jogada(jogadas_possiveis[i])
             self.branco_joga = not self.branco_joga
@@ -70,14 +155,22 @@ class Estado_Atual_do_Jogo():
                 jogadas_possiveis.remove(jogadas_possiveis[i])
             self.branco_joga = not self.branco_joga
             self.refaz_jogada()
+
         if len(jogadas_possiveis) == 0:
             if self.Check():
                 self.checkmate = True
             else:
                 self.afogamento = True
+        
+        if self.branco_joga:
+            self.jogada_roque(self.posicao_rei_branco[0], self.posicao_rei_branco[1], jogadas_possiveis)
         else:
-            self.checkmate = False
-            self.afogamento = False
+            self.jogada_roque(self.posicao_rei_preto[0], self.posicao_rei_preto[1], jogadas_possiveis)    
+
+
+        self.enpassant = temp_enpassant
+        self.roque_pequeno = temp_roque_pequeno
+
 
         return jogadas_possiveis
 
@@ -89,12 +182,6 @@ class Estado_Atual_do_Jogo():
             return self.casa_sobre_ataque(self.posicao_rei_branco[0], self.posicao_rei_branco[1])
         else:
             return self.casa_sobre_ataque(self.posicao_rei_preto[0], self.posicao_rei_preto[1])
-
-    def checkCravadas(self):
-        cravada = []
-        checks = []
-        Check = False
-
 
     '''
     Verifica se o inimigo pode atacar a casa(l,c)
@@ -108,9 +195,6 @@ class Estado_Atual_do_Jogo():
                 return True
         return False    
     
-
-
-
     '''
     Validação de jogadas -> Sem considerar checks
     '''
@@ -123,7 +207,6 @@ class Estado_Atual_do_Jogo():
                     peça = self.tabuleiro[l][c][0]
                     self.jogadaFuncoes[peça](l,c, jogadas)
         return jogadas
-
     
     '''
     Retorna todas as jogadas para os peões.
@@ -137,9 +220,13 @@ class Estado_Atual_do_Jogo():
             if c-1 >= 0:                              #Verifica captura para a diagonal esquerda
                 if self.tabuleiro[l-1][c-1][1] == "p": #Verifica se existe uma peça a ser capturada        
                     jogadas.append(Jogadas((l,c), (l-1,c-1), self.tabuleiro))
+                elif (l-1, c-1 ) == self.enpassant:
+                    jogadas.append(Jogadas((l,c), (l-1,c-1), self.tabuleiro, enpassant_jogada=True))
             if c+1 <= 7:                              #Verifica captura para a diagonal direita
                 if self.tabuleiro[l-1][c+1][1] == "p": #Verifica se existe uma peça a ser capturada        
                     jogadas.append(Jogadas((l,c), (l-1,c+1), self.tabuleiro))       
+                elif (l-1, c+1 ) == self.enpassant:
+                    jogadas.append(Jogadas((l,c), (l-1,c+1), self.tabuleiro, enpassant_jogada=True))    
         
         else: #Peão preto
             if self.tabuleiro[l+1][c] == "--":
@@ -151,11 +238,14 @@ class Estado_Atual_do_Jogo():
             if c-1 >= 0:                              #Verifica captura para a diagonal esquerda
                 if self.tabuleiro[l+1][c-1][1] == "b": #Verifica se existe uma peça a ser capturada        
                     jogadas.append(Jogadas((l,c), (l+1,c-1), self.tabuleiro))
+                elif (l+1, c-1 ) == self.enpassant:
+                    jogadas.append(Jogadas((l,c), (l+1,c-1), self.tabuleiro, enpassant_jogada=True))    
 
             if c+1 <= 7:                              #Verifica captura para a diagonal direita
                 if self.tabuleiro[l+1][c+1][1] == "b": #Verifica se existe uma peça a ser capturada        
                     jogadas.append(Jogadas((l,c), (l+1,c+1), self.tabuleiro)) 
-
+                elif (l+1, c+1 ) == self.enpassant:
+                    jogadas.append(Jogadas((l,c), (l+1,c+1), self.tabuleiro, enpassant_jogada=True))
 
 
     ''' 
@@ -192,7 +282,7 @@ class Estado_Atual_do_Jogo():
                 coluna_fim = c + d[1]
                 if 0 <= linha_fim < 8 and 0 <= coluna_fim < 8:
                     peça_fim = self.tabuleiro[linha_fim][coluna_fim]
-                    if peça_fim[0] != cor_aliada:
+                    if peça_fim[1] != cor_aliada:
                         jogadas.append(Jogadas((l,c), (linha_fim, coluna_fim), self.tabuleiro))
 
     ''' 
@@ -236,9 +326,37 @@ class Estado_Atual_do_Jogo():
                 coluna_fim = c + direção[i][1]
                 if 0 <= linha_fim < 8 and 0 <= coluna_fim < 8:
                     peça_fim = self.tabuleiro[linha_fim][coluna_fim]
-                    if peça_fim[0] != cor_aliada:
+                    if peça_fim[1] != cor_aliada:
                         jogadas.append(Jogadas((l,c), (linha_fim, coluna_fim), self.tabuleiro))
 
+    '''
+    Retorna todas as possibilidades de roque
+    '''
+    def jogada_roque(self, l, c, jogadas):
+        if self.casa_sobre_ataque(l,c):
+            return
+        if (self.branco_joga and self.roque_pequeno.rbs) or (not self.branco_joga and self.roque_pequeno.rps):
+            self.jogada_roque_pequeno(l, c, jogadas)
+        if (self.branco_joga and self.roque_pequeno.dbs) or (not self.branco_joga and self.roque_pequeno.dps):
+            self.jogada_roque_grande(l, c, jogadas)    
+
+    def jogada_roque_pequeno(self,l,c,jogadas):
+        if self.tabuleiro[l][c+1] == '--' and self.tabuleiro[l][c+2] == '--':
+            if not self.casa_sobre_ataque(l, c+1) and not self.casa_sobre_ataque(l, c+2):
+                jogadas.append(Jogadas((l, c), (l,c+2), self.tabuleiro, roque_jogada=True))
+
+    def jogada_roque_grande(self,l,c,jogadas):             
+        if self.tabuleiro[l][c-1] == '--' and self.tabuleiro[l][c-2] == "--" and self.tabuleiro[l][c-3]:
+            if not self.casa_sobre_ataque(l, c-1) and not self.casa_sobre_ataque(l, c-2):
+                jogadas.append(Jogadas((l, c), (l,c-2), self.tabuleiro, roque_jogada=True))
+
+
+class Roque_Pequeno_Atual():
+    def __init__(self, rbs, rps, dbs, dps):
+        self.rbs = rbs
+        self.rps = rps
+        self.dbs = dbs
+        self.dps = dps
 
 
 
@@ -254,15 +372,26 @@ class Jogadas():
                         "e": 4, "f": 5, "g": 6, "h": 7}                     
     colunas_fileras = {v: k for k, v in fileiras_colunas.items()}
     
-    def __init__(self, casa_ini, casa_fim, tabuleiro):
+    def __init__(self, casa_ini, casa_fim, tabuleiro, enpassant_jogada=False, roque_jogada=False):
         self.linha_ini  = casa_ini[0]
         self.coluna_ini = casa_ini[1]
         self.linha_fim  = casa_fim[0]
         self.coluna_fim = casa_fim[1]
         self.peça_jogada = tabuleiro[self.linha_ini][self.coluna_ini]
         self.peça_capturada = tabuleiro[self.linha_fim][self.coluna_fim]
+
+        #Promoção de Peões
+        self.promocao_peao = (self.peça_jogada == 'Pb' and self.linha_fim == 0) or (self.peça_jogada == 'Pp' and self.linha_fim == 7)
+        
+        #En Passant
+        self.enpassant_jogada = enpassant_jogada   
+        if self.enpassant_jogada:
+            self.peça_capturada = 'Pb' if self.peça_jogada == 'Pp' else 'Pp'
+        
+        #Roque
+        self.roque_jogada = roque_jogada
+
         self.jogada_ID = self.linha_ini * 1000 + self.coluna_ini * 100 + self.linha_fim * 10 + self.coluna_fim
-        print(self.jogada_ID)
 
     '''
     Sobreescreve métodos iguais
